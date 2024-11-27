@@ -1,0 +1,57 @@
+# Node modules
+node_modules/
+
+# PocketBase data and logs
+pb/pb_data/
+pb/pocketbase_*.zip
+
+# Build output
+dist/
+
+# Temporary files
+*.tmp
+*.log
+*.lock
+*.pid
+*.pid.lock
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# IDE-specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+*.bak
+
+# pnpm lockfile
+pnpm-lock.yaml
+
+# PostCSS cache
+.postcssrc
+
+# SvelteKit and Vite temporary files
+.svelte-kit/
+.vite/
+
+# TailwindCSS temporary files
+tailwind.css
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Generated files
+pb/types.d.ts
+
+# Thumbnails and generated images
+pb/pb_data/storage/**/*thumbs*
+pb/pb_data/storage/**/*.attrs
+
+# Miscellaneous
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
