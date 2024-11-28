@@ -143,7 +143,7 @@
         unsubscribe = await pb
             .collection("chats")
             .subscribe("*", async ({ action, record }) => {
-                if (action === "create") {
+                if (action === "create" || action === "update") {
                     const user = await pb
                         .collection("users")
                         .getOne(record.sender);
@@ -156,7 +156,7 @@
         unsubscribeGroups = await pb
             .collection("groups")
             .subscribe("*", async ({ action, record }) => {
-                if (action === "create") {
+                if (action === "create" || action === "update") {
                     await fetchGroups();
                     setTimeout(scrollToBottom, 100);
                 }
@@ -169,6 +169,104 @@
             unsubscribeGroups();
         }
     });
+
+    const handleAvatarUpload = async (event) => {
+        const input = event.target;
+        const file = input.files?.[0];
+
+        if (!file) return;
+
+        if (!file.type.startsWith("image/")) {
+            alert("Please upload an image file");
+            return;
+        }
+
+        if (file.size > 5 * 1024 * 1024) {
+            alert("Image size should be less than 5MB");
+            return;
+        }
+
+        try {
+            const formData = new FormData();
+            formData.append("image", file);
+
+            const currentPath = window.location.pathname
+                .replace("/", "")
+                .replaceAll("%20", " ");
+
+            const isGroup = groupChats?.find(
+                (group) => group.name === currentPath,
+            );
+
+            await pb.collection("groups").update(`${isGroup.id}`, formData);
+        } catch (error) {
+            console.error("Error uploading avatar:", error);
+            alert("Failed to upload avatar. Please try again.");
+        }
+
+        input.value = "";
+    };
+
+    async function handleFileUpload(event) {
+        if (!$currentUser) return;
+
+        const input = event.target;
+        const file = input.files?.[0];
+
+        if (!file) return;
+
+        if (file.size > 5 * 1024 * 1024) {
+            alert("File size should be less than 5MB");
+            return;
+        }
+
+        try {
+            const formData = new FormData();
+            formData.append("files", file);
+
+            const userName = window.location.pathname
+                .replace("/", "")
+                .replaceAll("%20", " ");
+
+            groupChats = await pb.collection("groups").getFullList({
+                filter: `members ~ "${$currentUser.id}"`,
+            });
+
+            const groupChat = groupChats?.find(
+                (chat) => chat.name === userName,
+            );
+
+            if (groupChat) {
+                const receiver = groupChat.members;
+                const data = {
+                    message: "Shared a file",
+                    sender: $currentUser.id,
+                    receiver: receiver,
+                    group: groupChat.id,
+                    files: formData.get("files"),
+                };
+                await pb.collection("chats").create(data);
+            } else {
+                const receiver = users.find(
+                    (user) => user.username === userName,
+                );
+                const data = {
+                    message: "Shared a file",
+                    sender: $currentUser.id,
+                    receiver: receiver.id,
+                    files: formData.get("files"),
+                };
+                await pb.collection("chats").create(data);
+            }
+
+            setTimeout(scrollToBottom, 100);
+        } catch (error) {
+            console.error("Error uploading file:", error);
+            alert("Failed to upload file. Please try again.");
+        }
+
+        input.value = "";
+    }
 </script>
 
 <div class="flex flex-col h-screen">
@@ -210,7 +308,7 @@
                         </button>
                         {#if showUserList}
                             <div
-                                class="absolute z-10 w-64 mt-2 bg-white border rounded-lg shadow-lg"
+                                class="absolute z-10 w-64 mt-2 right-2/4 bg-white border rounded-lg shadow-lg"
                             >
                                 <div class="p-3 border-b">
                                     <input
@@ -337,39 +435,48 @@
                 .replaceAll("%20", " ").length > 0}
                 <div class="p-4 bg-white border-b">
                     <div class="flex items-center gap-3">
-                        <img
-                            src={getImageUrl(
-                                users.find(
-                                    (user) =>
-                                        user.username ===
-                                        window.location.pathname
-                                            .replace("/", "")
-                                            .replaceAll("%20", " "),
-                                ) ||
-                                    groupChats?.find(
-                                        (group) =>
-                                            group.name ===
+                        <label for="avatar-upload" class="cursor-pointer">
+                            <img
+                                src={getImageUrl(
+                                    users.find(
+                                        (user) =>
+                                            user.username ===
                                             window.location.pathname
                                                 .replace("/", "")
                                                 .replaceAll("%20", " "),
-                                    ),
-                                users.find(
-                                    (user) =>
-                                        user.username ===
-                                        window.location.pathname
-                                            .replace("/", "")
-                                            .replaceAll("%20", " "),
-                                )?.avatar ||
-                                    groupChats?.find(
-                                        (group) =>
-                                            group.name ===
+                                    ) ||
+                                        groupChats?.find(
+                                            (group) =>
+                                                group.name ===
+                                                window.location.pathname
+                                                    .replace("/", "")
+                                                    .replaceAll("%20", " "),
+                                        ),
+                                    users.find(
+                                        (user) =>
+                                            user.username ===
                                             window.location.pathname
                                                 .replace("/", "")
                                                 .replaceAll("%20", " "),
-                                    )?.image,
-                            )}
-                            alt="User avatar"
-                            class="w-10 h-10 rounded-full"
+                                    )?.avatar ||
+                                        groupChats?.find(
+                                            (group) =>
+                                                group.name ===
+                                                window.location.pathname
+                                                    .replace("/", "")
+                                                    .replaceAll("%20", " "),
+                                        )?.image,
+                                )}
+                                alt="User avatar"
+                                class="w-10 h-10 rounded-full hover:opacity-80 transition-opacity"
+                            />
+                        </label>
+                        <input
+                            type="file"
+                            id="avatar-upload"
+                            accept="image/*"
+                            class="hidden"
+                            on:change={handleAvatarUpload}
                         />
                         <h2 class="text-lg font-semibold">
                             {users.find(
@@ -412,7 +519,18 @@
                                             <p
                                                 class="bg-[#dcf8c6] text-black p-3 rounded-lg max-w-[80vw] md:max-w-md break-words rounded-tr-none shadow-sm"
                                             >
-                                                {message.message}
+                                                {#if message.files.length > 0}
+                                                    <img
+                                                        src={getImageUrl(
+                                                            message,
+                                                            message.files,
+                                                        )}
+                                                        alt="Shared file"
+                                                        class="max-w-[200px] rounded"
+                                                    />
+                                                {:else}
+                                                    {message.message}
+                                                {/if}
                                             </p>
                                         </div>
                                     </div>
@@ -425,7 +543,18 @@
                                             <p
                                                 class="bg-white text-black p-3 rounded-lg max-w-[80vw] md:max-w-md break-words rounded-tl-none shadow-sm"
                                             >
-                                                {message.message}
+                                                {#if message.files.length > 0}
+                                                    <img
+                                                        src={getImageUrl(
+                                                            message,
+                                                            message.files,
+                                                        )}
+                                                        alt="Shared file"
+                                                        class="max-w-[200px] rounded"
+                                                    />
+                                                {:else}
+                                                    {message.message}
+                                                {/if}
                                             </p>
                                         </div>
                                     </div>
@@ -456,22 +585,30 @@
                         class="flex-1 p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                     <button type="button" aria-label="Upload file">
-                        <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="2em"
-                            height="2em"
-                            viewBox="0 0 24 24"
-                        >
-                            <path
-                                fill="none"
-                                stroke="currentColor"
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="1.5"
-                                d="M19.5 12v1.5a7.5 7.5 0 0 1-15 0V8a5 5 0 0 1 10 0v5.5a2.5 2.5 0 0 1-5 0v-4"
-                                color="currentColor"
-                            />
-                        </svg>
+                        <input
+                            type="file"
+                            id="fileInput"
+                            class="hidden"
+                            on:change={handleFileUpload}
+                        />
+                        <label for="fileInput" class="cursor-pointer">
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                width="2em"
+                                height="2em"
+                                viewBox="0 0 24 24"
+                            >
+                                <path
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="1.5"
+                                    d="M19.5 12v1.5a7.5 7.5 0 0 1-15 0V8a5 5 0 0 1 10 0v5.5a2.5 2.5 0 0 1-5 0v-4"
+                                    color="currentColor"
+                                />
+                            </svg>
+                        </label>
                     </button>
                     <button
                         type="submit"
